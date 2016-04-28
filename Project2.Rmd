@@ -1,0 +1,29 @@
+---
+title: "Project2"
+author: "Robert Begg"
+date: "April 28, 2016"
+output: html_document
+---
+Synopis here
+# Data Processing
+
+##Load libraries
+```{r}
+library(utils)
+library(R.utils)
+```
+
+
+##Get source Data
+```{r}
+if(!file.exists("repdata-data-StormData.csv.bz2")){
+        download.file(
+                "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",
+                "repdata-data-StormData.csv.bz2" )    
+}
+if(!file.exists("repdata-data-StormData.csv")){
+        bunzip2("repdata-data-StormData.csv.bz2")    
+}
+```
+
+
