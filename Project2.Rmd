@@ -1,20 +1,32 @@
 ---
-title: "Project2"
+title: "Impact of Severe Weather on US Population Health and Economic Consequence"
 author: "Robert Begg"
 date: "April 28, 2016"
-output: html_document
+output: 
+  html_document:
+    keep_md: true
 ---
-Synopis here
-# Data Processing
+# Synopsis
+This report uses the data from the National Oceanic and Atmospheric Administration (NOAA) Storm Database to addresses the impact of severe weather on the US population health and economic consequnence.  Two key questions are answered:
+
+1.Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+2.Across the United States, which types of events have the greatest economic consequences?
+# Loading and Processing the RaW Data
 
 ##Load libraries
-```{r}
+```{r warning=FALSE,results='hide',message=FALSE}
 library(utils)
 library(R.utils)
+library(ggplot2)
 ```
 
 
 ##Get source Data
+The data was download from [Coursera project](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2).  The data is a text file in CSV format, with missing data represented as empty fields.
+
+[Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) about the National Weather Service Storm data and an [FAQ] (https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf).
+
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
 ```{r}
 if(!file.exists("repdata-data-StormData.csv.bz2")){
         download.file(
@@ -25,5 +37,108 @@ if(!file.exists("repdata-data-StormData.csv")){
         bunzip2("repdata-data-StormData.csv.bz2")    
 }
 ```
+
+The CSV data was read into a data frame object.  
+```{r cache=TRUE}
+StormData <- read.csv("repdata-data-StormData.csv")
+
+dim(StormData)
+```
+There was `r dim(StormData)[1]` observations of `r dim(StormData)[2]` variables.
+The first 10 rows of the data:
+```{r}
+head(StormData)
+```
+
+# Results
+
+First we aggregate all fatalities and injuries by EVTYPE. 
+
+```{r}
+# Aggregate number of fatalities and injuries by event type, order result
+healthType <- aggregate(cbind(FATALITIES, INJURIES) ~ EVTYPE, StormData, sum)
+```
+
+Then we remove observations that have zero fatalities or injuries.
+```{r}
+# Remove observations with no fatalitites or injuries
+fType <- subset(healthType, FATALITIES!=0, select = c(EVTYPE,FATALITIES))
+
+fType <- cbind(fType, round(fType$FATALITIES/sum(fType$FATALITIES)*100,2))
+colnames(fType)[3] <- c("Percentage")
+
+iType <- subset(healthType, INJURIES!=0, select = c(EVTYPE,INJURIES))
+
+iType <- cbind(iType, round(iType$INJURIES/sum(iType$INJURIES)*100,2))
+colnames(iType)[3] <- c("Percentage")
+```
+
+Finally we create a set ordered by Fatalities, and another ordered by Injuries.
+```{r}
+# Order result
+fType <- fType[order(-fType$FATALITIES),]
+iType <- iType[order(-iType$INJURIES),]
+```
+
+## Which Events are most harmful with respect to population health?
+
+The data has two variables, fatalities and injuries, that indicate harm to population health.
+
+```{r}
+#set number of top events
+n <- 35
+```
+###Fatalities
+The following plot shows the Top `r n` Weather events (EVTYPE) causing fatalities:
+```{r fig.width=8,fig.height=10}
+
+fPlot <- ggplot(fType[1:n,], aes(EVTYPE, FATALITIES)) + 
+        geom_bar(stat="identity", fill="firebrick",colour="yellow") +
+        scale_x_discrete(limits=(fType[1:n,]$EVTYPE)) +
+        ggtitle("Fatalities by Weather Event Type") +
+        ylab("Number of Fatalities") +
+        xlab("Weather Event Type") +
+        theme(axis.title.x = element_text(face="bold", colour="black", size=12),
+           axis.text.x  = element_text(angle=90, vjust=0.5, size=12)) +
+        theme(axis.title.y = element_text(face="bold", colour="black", size=14),
+              axis.text.y  = element_text(size=12)) +
+        theme(title = element_text(face="bold", colour="black", size=16))
+           
+fPlot
+```
+
+###Injuries
+
+The following plot shows the Top `r n` Weather events (EVTYPE) causing inuries:
+
+```{r fig.width=8,fig.height=10}
+
+iPlot <- ggplot(iType[1:n,], aes(EVTYPE, INJURIES)) + 
+        geom_bar(stat="identity", fill="navyblue",colour="yellow") +
+        scale_x_discrete(limits=(iType[1:n,]$EVTYPE)) +
+        ggtitle("Injuries by Weather Event Type") +
+        ylab("Number of Injuries") +
+        xlab("Weather Event Type") +
+        theme(axis.title.x = element_text(face="bold", colour="black", size=12),
+           axis.text.x  = element_text(angle=90, vjust=0.5, size=12)) +
+        theme(axis.title.y = element_text(face="bold", colour="black", size=14),
+              axis.text.y  = element_text(size=12)) +
+        theme(title = element_text(face="bold", colour="black", size=16))
+           
+iPlot
+```
+
+###Conclusion
+The events that cause 1 % or more of Fatalities:
+```{r}
+fType[fType$Percentage>=1,]$EVTYPE
+```
+The events that cause 1 % or more of Inuries:
+```{r}
+iType[iType$Percentage>=1,]$EVTYPE
+```
+
+##Which types of events have the greatest economic consequences?
+
 
 
