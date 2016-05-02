@@ -295,7 +295,7 @@ Tornados cause both the largest number of deaths and injuries by a wide margin. 
 
 ## Which types of events have the greatest economic consequences?
 
-The data has two variables, property damage and crop damage , that indicate economic consequence.  In this case, we will combine the two variables.
+The data has two variables, property damage and crop damage , that indicate economic consequence.  In this case, we will combine the two variables in the analyses.
 
 
 ```r
