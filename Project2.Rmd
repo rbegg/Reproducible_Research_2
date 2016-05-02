@@ -14,20 +14,24 @@ This report uses the data from the National Oceanic and Atmospheric Administrati
 # Loading and Processing the RaW Data
 
 ##Load libraries
-```{r warning=FALSE,results='hide',message=FALSE}
+
+```{r Load_Libraries, warning=FALSE,results='hide',message=FALSE}
 library(utils)
 library(R.utils)
 library(ggplot2)
+library(dplyr)
+library(tidyr)
 ```
 
 
-##Get source Data
+## Get source Data
+
 The data was download from [Coursera project](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2).  The data is a text file in CSV format, with missing data represented as empty fields.
 
-[Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) about the National Weather Service Storm data and an [FAQ] (https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf).
+[Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) about the National Weather Service Storm data and an [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf).
 
 The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
-```{r}
+```{r Download_Data_File}
 if(!file.exists("repdata-data-StormData.csv.bz2")){
         download.file(
                 "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",
@@ -38,29 +42,93 @@ if(!file.exists("repdata-data-StormData.csv")){
 }
 ```
 
+## Loading the Data
+
 The CSV data was read into a data frame object.  
-```{r cache=TRUE}
+```{r Load_Data, cache=TRUE}
 StormData <- read.csv("repdata-data-StormData.csv")
 
 dim(StormData)
 ```
 There was `r dim(StormData)[1]` observations of `r dim(StormData)[2]` variables.
 The first 10 rows of the data:
-```{r}
+```{r Head}
 head(StormData)
 ```
+
+## Subsetting the Data
+
+We are only interested in observations with non-zero values for population health and economic variables.
+
+```{r Subset_Data}
+HealthData <- StormData %>%
+        filter(FATALITIES !=0 | INJURIES !=0) %>%
+        select(EVTYPE,FATALITIES,INJURIES)
+dim(HealthData)
+
+EconomicData <- StormData %>%
+        filter(PROPDMG !=0 | CROPDMG !=0) %>%
+        select(EVTYPE,PROPDMG,PROPDMGEXP,CROPDMG, CROPDMGEXP)
+dim(EconomicData)
+```
+
+
+## Converting Damage Values
+
+The original data uses 3 significant digits in the PROPDMG and CROPDMG variables, and use the PROPDMGEXP and CROPDMGEXP variables to define the exponents.  Although the documentation indicates the exponent columns should only contain K (thousands), M (Millions), B (Billions) the levels command below shows the data actually contains a number of values.
+```{r Explore_Exponents}
+levels(EconomicData$PROPDMGEXP) # Unique values used in Property Damage Exponent Variable
+levels(EconomicData$CRPODMGEXP) # Unique values used in Crop Damage Exponent Variable
+```
+
+The following code was used to convert the damage variables to numeric values.  Values are intepreted as follows:
+
+1. 0 - 8 are interpreted as character representation of the exponents
+2. Lower and upper case values for K, M, B follow the documentation (1e+03, 1e+06, 1e+09 repsectively)
+3. Lower and upper case H is interpreted as Hundred or 1e+02 
+4. Empty "", Blank " ", "-","?" and "+" characters are treated as missing, and treated as zero in the analysis.
+First we convert the damage estimates into numeric values.
+
+```{r convert_Exponents}
+# Create lookup table to convert exponents to consisten exponent format
+lookup <- list( Factor = c(""," ","?","+","-","H","h","k","K","m","M","b","B",
+                            "0","1","2","3","4","5","6","7","8","9"),
+                Value = c(1,1,1,1,1,1e+02,1e+02,1e+03,1e+03,1e+06,1e+06,1e+09,1e+09,
+                          0,1e+01,1e+02,1e+03,1e+04,1e+05,1e+06,1e+07,1e+08,1e+9))
+print(lookup)        
+
+# Function to convert exponents
+myConvert <- function(old) {
+        new <- array(dim = length(old))
+        
+        for (i in 1:length(old)) {
+                new[i] <- lookup$Value[lookup$Factor == old[i]]
+        }
+        return(new)
+}
+# Modify the Factor values by converting to consistent exponent format
+levels(EconomicData$PROPDMGEXP) <- myConvert(levels(EconomicData$PROPDMGEXP))
+levels(EconomicData$CROPDMGEXP) <- myConvert(levels(EconomicData$CROPDMGEXP))
+
+EconomicData <- mutate(EconomicData, 
+                       pDMG = PROPDMG * as.numeric(levels(PROPDMGEXP))[PROPDMGEXP] / 1e+09,
+                       cDMG = CROPDMG * as.numeric(levels(CROPDMGEXP))[CROPDMGEXP] / 1e+09,
+                       tDMG = pDMG + cDMG )
+
+```
+
 
 # Results
 
 First we aggregate all fatalities and injuries by EVTYPE. 
 
-```{r}
+```{r Aggregate_Health}
 # Aggregate number of fatalities and injuries by event type, order result
 healthType <- aggregate(cbind(FATALITIES, INJURIES) ~ EVTYPE, StormData, sum)
 ```
 
 Then we remove observations that have zero fatalities or injuries.
-```{r}
+```{r Subset_Health}
 # Remove observations with no fatalitites or injuries
 fType <- subset(healthType, FATALITIES!=0, select = c(EVTYPE,FATALITIES))
 
@@ -74,7 +142,7 @@ colnames(iType)[3] <- c("Percentage")
 ```
 
 Finally we create a set ordered by Fatalities, and another ordered by Injuries.
-```{r}
+```{r OrderHealh}
 # Order result
 fType <- fType[order(-fType$FATALITIES),]
 iType <- iType[order(-iType$INJURIES),]
@@ -84,13 +152,15 @@ iType <- iType[order(-iType$INJURIES),]
 
 The data has two variables, fatalities and injuries, that indicate harm to population health.
 
-```{r}
+```{r set_Top_Health_Events}
 #set number of top events
 n <- 35
 ```
-###Fatalities
+
+### Fatalities
+
 The following plot shows the Top `r n` Weather events (EVTYPE) causing fatalities:
-```{r fig.width=8,fig.height=10}
+```{r Plot_Fatalities, fig.width=8,fig.height=10}
 
 fPlot <- ggplot(fType[1:n,], aes(EVTYPE, FATALITIES)) + 
         geom_bar(stat="identity", fill="firebrick",colour="yellow") +
@@ -107,11 +177,11 @@ fPlot <- ggplot(fType[1:n,], aes(EVTYPE, FATALITIES)) +
 fPlot
 ```
 
-###Injuries
+### Injuries
 
 The following plot shows the Top `r n` Weather events (EVTYPE) causing inuries:
 
-```{r fig.width=8,fig.height=10}
+```{r Plot_Injuries, fig.width=8,fig.height=10}
 
 iPlot <- ggplot(iType[1:n,], aes(EVTYPE, INJURIES)) + 
         geom_bar(stat="identity", fill="navyblue",colour="yellow") +
@@ -128,7 +198,8 @@ iPlot <- ggplot(iType[1:n,], aes(EVTYPE, INJURIES)) +
 iPlot
 ```
 
-###Conclusion
+### Conclusion
+
 The events that cause 1 % or more of Fatalities:
 ```{r}
 fType[fType$Percentage>=1,]$EVTYPE
@@ -138,7 +209,86 @@ The events that cause 1 % or more of Inuries:
 iType[iType$Percentage>=1,]$EVTYPE
 ```
 
-##Which types of events have the greatest economic consequences?
+## Which types of events have the greatest economic consequences?
 
+The data has two variables, property damage and crop damage , that indicate economic consequence.
 
+```{r set_Top_Damage_Events}
+#set number of top events
+n <- 20
+```
+
+Next we aggregate all damage by EVTYPE. 
+
+```{r}
+# Aggregate number of fatalities and injuries by event type, order result
+
+dmgType <- aggregate(cbind(pDMG, cDMG) ~ EVTYPE, EconomicData, sum) %>%
+        gather(dType, Damage, pDMG, cDMG) %>%
+        arrange(desc(Damage))
+
+# Order the Weather Events in order of damage, remove duplicates
+orderedEcoEvents <- aggregate(cbind(tDMG) ~ EVTYPE, EconomicData, sum) %>%
+        arrange(desc(tDMG))
+        
+# Refacttor EVTYPE to order by total damage
+dmgType$EVTYPE <- factor(dmgType$EVTYPE, levels = orderedEcoEvents$EVTYPE)
+                
+```
+
+Finally we create a set ordered by Fatalities, and another ordered by Injuries.
+```{r OrderEconomic}
+# Order result
+pType <- dmgType[order(-dmgType$pDMG),]
+cType <- dmgType[order(-dmgType$cDMG),]
+```
+
+### Property Damage
+
+The following plot shows the Top `r n` Weather events (EVTYPE) causing property damage:
+```{r Plot_Property_Damage, fig.width=8,fig.height=10}
+
+pPlot <- ggplot(pType[1:n,], aes(EVTYPE, pDMG)) + 
+        geom_bar(stat="identity", fill="firebrick",colour="yellow") +
+        scale_x_discrete(limits=(pType[1:n,]$EVTYPE)) +
+        ggtitle("Property Damage by Weather Event Type") +
+        ylab("Property Damage (Billions $") +
+        xlab("Weather Event Type") +
+        theme(axis.title.x = element_text(face="bold", colour="black", size=12),
+           axis.text.x  = element_text(angle=90, vjust=0.5, size=12)) +
+        theme(axis.title.y = element_text(face="bold", colour="black", size=14),
+              axis.text.y  = element_text(size=12)) +
+        theme(title = element_text(face="bold", colour="black", size=16))
+           
+pPlot
+```
+
+### Crop Damage
+
+The following plot shows the Top `r n` Weather events (EVTYPE) causing crop damage:
+```{r Plot_Crop_Damage, fig.width=8,fig.height=10}
+
+pPlot <- ggplot(cType[1:n,], aes(EVTYPE, cDMG)) + 
+        geom_bar(stat="identity", fill="firebrick",colour="yellow") +
+        scale_x_discrete(limits=(cType[1:n,]$EVTYPE)) +
+        ggtitle("Crop Damage by Weather Event Type") +
+        ylab("Crop Damage (Billions $)") +
+        xlab("Weather Event Type") +
+        theme(axis.title.x = element_text(face="bold", colour="black", size=12),
+           axis.text.x  = element_text(angle=90, vjust=0.5, size=12)) +
+        theme(axis.title.y = element_text(face="bold", colour="black", size=14),
+              axis.text.y  = element_text(size=12)) +
+        theme(title = element_text(face="bold", colour="black", size=16))
+           
+pPlot
+```
+
+### Total Damage
+
+The following plot shows the Top `r n` Weather events (EVTYPE) causing crop damage:
+```{r Plot_Total_Damage, fig.width=8,fig.height=10}
+
+p <- ggplot(topEcoEvents, aes(x=EVTYPE, y=Damage, fill=dType)) + geom_bar(stat="identity")
+p
+```
 
