@@ -2,7 +2,7 @@
 Robert Begg  
 April 28, 2016  
 # Synopsis
-This report uses the data from the National Oceanic and Atmospheric Administration (NOAA) Storm Database to addresses the impact of severe weather on the US population health and economic consequnence.  Two key questions are answered:
+This report uses the data from the National Oceanic and Atmospheric Administration (NOAA) Storm Database to addresses the impact of severe weather on the US population health and economic consequence.  Two key questions are answered:
 
 1.Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
 2.Across the United States, which types of events have the greatest economic consequences?
